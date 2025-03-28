@@ -281,6 +281,7 @@ class NTupleApproximator:
 
 approximator = None
 def get_action(state, score):
+    global approximator 
     if approximator is None:
         patterns = []
         for row in range(4):
