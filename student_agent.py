@@ -13,7 +13,7 @@ import math
 class Game2048Env(gym.Env):
     def __init__(self):
         super(Game2048Env, self).__init__()
-        print("It will call this function.")
+    
         self.size = 4  # 4x4 2048 board
         self.board = np.zeros((self.size, self.size), dtype=int)
         self.score = 0
@@ -132,7 +132,7 @@ class Game2048Env(gym.Env):
 
         return True
 
-    def step(self, action):
+    def step(self, action, spawn_tile=True):
         """Execute one action"""
         assert self.action_space.contains(action), "Invalid action"
 
@@ -149,41 +149,13 @@ class Game2048Env(gym.Env):
 
         self.last_move_valid = moved  # Record if the move was valid
 
-        if moved:
+        if moved and spawn_tile:
             self.add_random_tile()
 
         done = self.is_game_over()
 
         return self.board, self.score, done, {}
 
-    def render(self, mode="human", action=None):
-        """
-        Render the current board using Matplotlib.
-        This function does not check if the action is valid and only displays the current board state.
-        """
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xlim(-0.5, self.size - 0.5)
-        ax.set_ylim(-0.5, self.size - 0.5)
-
-        for i in range(self.size):
-            for j in range(self.size):
-                value = self.board[i, j]
-                color = COLOR_MAP.get(value, "#3c3a32")  # Default dark color
-                text_color = TEXT_COLOR.get(value, "white")
-                rect = plt.Rectangle((j - 0.5, i - 0.5), 1, 1, facecolor=color, edgecolor="black")
-                ax.add_patch(rect)
-
-                if value != 0:
-                    ax.text(j, i, str(value), ha='center', va='center',
-                            fontsize=16, fontweight='bold', color=text_color)
-        title = f"score: {self.score}"
-        if action is not None:
-            title += f" | action: {self.actions[action]}"
-        plt.title(title)
-        plt.gca().invert_yaxis()
-        plt.show()
 
     def simulate_row_move(self, row):
         """Simulate a left move for a single row"""
@@ -230,10 +202,128 @@ class Game2048Env(gym.Env):
 
         # If the simulated board is different from the current board, the move is legal
         return not np.array_equal(self.board, temp_board)
+import pickle
+import copy
+import random
+import math
+import numpy as np
+from collections import defaultdict
+import pickle
+from collections import namedtuple
 
+# -------------------------------
+# TODO: Define transformation functions (rotation and reflection), i.e., rot90, rot180, ..., etc.
+# -------------------------------
+def rot90(pattern):
+    return [(y, 3 - x) for (x, y) in pattern]
+
+def rot180(pattern):
+    return [(3 - x, 3 - y) for (x, y) in pattern]
+
+def rot270(pattern):
+    return [(3 - y, x) for (x, y) in pattern]
+
+def flip_horizontal(pattern):
+    return [(x, 3 - y) for (x, y) in pattern]
+
+
+class NTupleApproximator:
+    def __init__(self, board_size, patterns):
+        """
+        Initializes the N-Tuple approximator.
+        Hint: you can adjust these if you want
+        """
+        self.board_size = board_size
+        self.patterns = patterns
+        # Create a weight dictionary for each pattern (shared within a pattern group)
+        self.weights = [defaultdict(float) for _ in patterns]
+
+    def tile_to_index(self, tile):
+        """
+        Converts tile values to an index for the lookup table.
+        """
+        if tile == 0:
+            return 0
+        else:
+            return int(math.log(tile, 2))
+
+    def get_feature(self, board, coords):
+        # TODO: Extract tile values from the board based on the given coordinates and convert them into a feature tuple.
+        return tuple(self.tile_to_index(board[x, y]) for (x, y) in coords)
+
+
+    def value(self, board):
+        # TODO: Estimate the board value: sum the evaluations from all patterns.
+        total = 0.0
+        for i, sys in enumerate(self.patterns):
+            feature = self.get_feature(board, sys)
+            total += self.weights[i][feature]
+        total = total / len(self.patterns)
+        return total
+
+    def update(self, board, delta, alpha):
+        # TODO: Update weights based on the TD error.
+        # num_pattern = len(self.patterns)
+        # normalized_alpha = alpha / num_pattern
+        for i, sys in enumerate(self.patterns):
+                feature = self.get_feature(board, sys)
+                self.weights[i][feature] += delta * alpha
+
+
+    def save(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self.weights, f)
+
+    def load(self, filename):
+        with open(filename, 'rb') as f:
+            self.weights = pickle.load(f)
+
+
+approximator = None
 def get_action(state, score):
+    if approximator is None:
+        patterns = []
+        for row in range(4):
+            pattern = [(row, col) for col in range(4)]
+            patterns.append(pattern)
+
+        for col in range(4):
+            pattern = [(row, col) for row in range(4)]
+            patterns.append(pattern)
+
+        for row in range(3): 
+            for col in range(3):  
+                pattern = [
+                    (row, col),
+                    (row, col+1),
+                    (row+1, col),
+                    (row+1, col+1)
+                ]
+                patterns.append(pattern)
+
+        approximator = NTupleApproximator(board_size=4, patterns=patterns)
+        approximator.load("tdlearning.pkl")
     env = Game2048Env()
-    return random.choice([0, 1, 2, 3]) # Choose a random action
+    env.board = np.array(state, dtype=int) 
+    env.score = score  
+    legal_moves = [a for a in range(4) if env.is_move_legal(a)]
+    if not legal_moves:
+        return 0  # 如果沒合法動作，回傳預設值
+
+    # 模擬每個動作的結果，選擇估價值最大的
+    best_value = float('-inf')
+    best_action = None
+    for a in legal_moves:
+        sim_env = copy.deepcopy(env)
+        sim_env.step(a, spawn_tile=False)
+        after_state = sim_env.board.copy()
+        value = approximator.value(after_state)
+
+        if value > best_value:
+            best_value = value
+            best_action = a
+
+    return best_action
     
     # You can submit this random agent to evaluate the performance of a purely random strategy.
 
