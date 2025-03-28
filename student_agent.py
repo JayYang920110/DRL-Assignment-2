@@ -303,8 +303,7 @@ def get_action(state, score):
                 patterns.append(pattern)
 
         approximator = NTupleApproximator(board_size=4, patterns=patterns)
-        with open("tdlearning.pkl", "wb") as f:
-            pickle.dump(approximator.weights, f)
+        approximator.load("tdlearning.pkl")
     env = Game2048Env()
     env.board = np.array(state, dtype=int) 
     env.score = score  
