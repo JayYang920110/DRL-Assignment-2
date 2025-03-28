@@ -13,7 +13,7 @@ import math
 class Game2048Env(gym.Env):
     def __init__(self):
         super(Game2048Env, self).__init__()
-
+        print("It will call this function.")
         self.size = 4  # 4x4 2048 board
         self.board = np.zeros((self.size, self.size), dtype=int)
         self.score = 0
