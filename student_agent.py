@@ -13,7 +13,7 @@ import math
 class Game2048Env(gym.Env):
     def __init__(self):
         super(Game2048Env, self).__init__()
-
+    
         self.size = 4  # 4x4 2048 board
         self.board = np.zeros((self.size, self.size), dtype=int)
         self.score = 0
@@ -132,7 +132,7 @@ class Game2048Env(gym.Env):
 
         return True
 
-    def step(self, action):
+    def step(self, action, spawn_tile=True):
         """Execute one action"""
         assert self.action_space.contains(action), "Invalid action"
 
@@ -149,41 +149,13 @@ class Game2048Env(gym.Env):
 
         self.last_move_valid = moved  # Record if the move was valid
 
-        if moved:
+        if moved and spawn_tile:
             self.add_random_tile()
 
         done = self.is_game_over()
 
         return self.board, self.score, done, {}
 
-    def render(self, mode="human", action=None):
-        """
-        Render the current board using Matplotlib.
-        This function does not check if the action is valid and only displays the current board state.
-        """
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xlim(-0.5, self.size - 0.5)
-        ax.set_ylim(-0.5, self.size - 0.5)
-
-        for i in range(self.size):
-            for j in range(self.size):
-                value = self.board[i, j]
-                color = COLOR_MAP.get(value, "#3c3a32")  # Default dark color
-                text_color = TEXT_COLOR.get(value, "white")
-                rect = plt.Rectangle((j - 0.5, i - 0.5), 1, 1, facecolor=color, edgecolor="black")
-                ax.add_patch(rect)
-
-                if value != 0:
-                    ax.text(j, i, str(value), ha='center', va='center',
-                            fontsize=16, fontweight='bold', color=text_color)
-        title = f"score: {self.score}"
-        if action is not None:
-            title += f" | action: {self.actions[action]}"
-        plt.title(title)
-        plt.gca().invert_yaxis()
-        plt.show()
 
     def simulate_row_move(self, row):
         """Simulate a left move for a single row"""
@@ -230,11 +202,182 @@ class Game2048Env(gym.Env):
 
         # If the simulated board is different from the current board, the move is legal
         return not np.array_equal(self.board, temp_board)
+import pickle
+import copy
+import random
+import math
+import numpy as np
+from collections import defaultdict
+import pickle
+from collections import namedtuple
 
+# -------------------------------
+# TODO: Define transformation functions (rotation and reflection), i.e., rot90, rot180, ..., etc.
+# -------------------------------
+def rot90(pattern):
+    return [(y, 3 - x) for (x, y) in pattern]
+
+def rot180(pattern):
+    return [(3 - x, 3 - y) for (x, y) in pattern]
+
+def rot270(pattern):
+    return [(3 - y, x) for (x, y) in pattern]
+
+def flip_horizontal(pattern):
+    return [(x, 3 - y) for (x, y) in pattern]
+
+
+class NTupleApproximator:
+    def __init__(self, board_size, patterns):
+        """
+        Initializes the N-Tuple approximator.
+        Hint: you can adjust these if you want
+        """
+        self.board_size = board_size
+        self.patterns = patterns
+        # Create a weight dictionary for each pattern (shared within a pattern group)
+        self.weights = [defaultdict(float) for _ in patterns]
+    #     # Generate symmetrical transformations for each pattern
+        self.symmetry_patterns = []
+        for pattern in self.patterns:
+            syms = self.generate_symmetries(pattern)
+            self.symmetry_patterns.append(syms)
+
+    def generate_symmetries(self, pattern):
+        # TODO: Generate 8 symmetrical transformations of the given pattern.
+        syms = [
+            pattern,
+            rot90(pattern),
+            rot180(pattern),
+            rot270(pattern),
+            flip_horizontal(pattern),
+            rot90(flip_horizontal(pattern)),
+            rot180(flip_horizontal(pattern)),
+            rot270(flip_horizontal(pattern))
+        ]
+        return syms
+    def tile_to_index(self, tile):
+        """
+        Converts tile values to an index for the lookup table.
+        """
+        if tile == 0:
+            return 0
+        else:
+            return int(math.log(tile, 2))
+
+    def get_feature(self, board, coords):
+        # TODO: Extract tile values from the board based on the given coordinates and convert them into a feature tuple.
+        return tuple(self.tile_to_index(board[x, y]) for (x, y) in coords)
+
+
+    # def value(self, board):
+    #     # TODO: Estimate the board value: sum the evaluations from all patterns.
+    #     # total = 0.0
+    #     # for i, sys in enumerate(self.patterns):
+    #     #     feature = self.get_feature(board, sys)
+    #     #     total += self.weights[i][feature]
+    #     # total = total / len(self.patterns)
+    #     # return total
+    #     total = 0.0
+    #     count = 0
+    #     for i, sym_group in enumerate(self.symmetry_patterns):
+    #         for coords in sym_group:
+    #             feature = self.get_feature(board, coords)
+    #             total += self.weights[i][feature]
+    #             count += 1
+    #     return total / count if count > 0 else 0.0
+    def value(self, board):
+        total = 0.0
+        for p in range(len(self.patterns)):
+            pattern_sum = 0.0
+            for sym in self.symmetry_patterns[p]:
+                index = tuple(self.tile_to_index(board[r, c]) for (r, c) in sym)
+                pattern_sum += self.weights[p][index]
+            total += pattern_sum / 8.0  # 對8個對稱平均
+        return total
+    # def update(self, board, delta, alpha):
+    #     # TODO: Update weights based on the TD error.
+    #     # num_pattern = len(self.patterns)
+    #     # normalized_alpha = alpha / num_pattern
+    #     # for i, sys in enumerate(self.patterns):
+    #     #         feature = self.get_feature(board, sys)
+    #     #         self.weights[i][feature] += delta * alpha
+    #     for i, sym_group in enumerate(self.symmetry_patterns):  # 每個 pattern 的對稱群組
+    #         for coords in sym_group:  # 這組 pattern 的所有對稱版本
+    #             feature = self.get_feature(board, coords)
+    #             self.weights[i][feature] += (alpha * delta) / len(sym_group) 
+    #             # self.weights[i][feature] += (alpha * delta) 
+    def update(self, board, delta, alpha):
+        for p in range(len(self.patterns)):  # 遍歷所有 pattern
+            for sym in self.symmetry_patterns[p]:  # 遍歷該 pattern 的所有對稱版本
+                index = tuple(self.tile_to_index(board[r, c]) for (r, c) in sym)  # 將棋盤上的 tile 值轉換為索引
+                self.weights[p][index] += alpha * delta  # 更新對應特徵的權重
+    def save(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self.weights, f)
+
+    def load(self, filename):
+        with open(filename, 'rb') as f:
+            self.weights = pickle.load(f)
+
+
+approximator = None
 def get_action(state, score):
+    global approximator 
+    if approximator is None:
+        # patterns = []
+        # for row in range(4):
+        #     pattern = [(row, col) for col in range(4)]
+        #     patterns.append(pattern)
+
+        # for col in range(4):
+        #     pattern = [(row, col) for row in range(4)]
+        #     patterns.append(pattern)
+
+        # for row in range(3): 
+        #     for col in range(3):  
+        #         pattern = [
+        #             (row, col),
+        #             (row, col+1),
+        #             (row+1, col),
+        #             (row+1, col+1)
+        #         ]
+        #         patterns.append(pattern)
+        patterns = [[(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
+                [(1,1), (1,2), (2,1), (2,2), (3,1), (3,2)],
+                [(0,0), (1,0), (2,0), (2,1), (3,0), (3,1)],
+                [(0,1), (1,1), (2,1), (2,2), (3,1), (3,2)]]
+
+        approximator = NTupleApproximator(board_size=4, patterns=patterns)
+        approximator.load("ntuple_weights.pkl")
+
     env = Game2048Env()
-    return random.choice([0, 1, 2, 3]) # Choose a random action
+    env.board = np.array(state, dtype=int) 
+    env.score = score  
+    legal_moves = [a for a in range(4) if env.is_move_legal(a)]
+    if not legal_moves:
+        return 0  # 如果沒合法動作，回傳預設值
+
+    # 模擬每個動作的結果，選擇估價值最大的
+    best_value = float('-inf')
+    best_action = None
+    for a in legal_moves:
+        sim_env = copy.deepcopy(env)
+        sim_env.step(a, spawn_tile=False)
+        after_state = sim_env.board.copy()
+        value = approximator.value(after_state)
+
+        if value > best_value:
+            best_value = value
+            best_action = a
+
+    return best_action
     
     # You can submit this random agent to evaluate the performance of a purely random strategy.
+
+
+
+
+
 
 
