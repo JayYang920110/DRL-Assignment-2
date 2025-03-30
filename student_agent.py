@@ -324,6 +324,8 @@ class NTupleApproximator:
         self.weights = [defaultdict(float, w) for w in simple_weights]
 
 approximator = None
+already_printed_2048 = False
+already_printed_4096 = False
 def get_action(state, score):
     global approximator 
     if approximator is None:
@@ -355,6 +357,21 @@ def get_action(state, score):
 
     env = Game2048Env()
     env.board = np.array(state, dtype=int) 
+    if np.all(env.board == 0):
+        already_printed_2048 = False
+        already_printed_4096 = False
+        
+    if not already_printed_2048:
+        max_tile = np.max(env.board)
+        if max_tile == 2048:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_2048 = True  
+    elif not already_printed_4096:
+        max_tile = np.max(env.board)
+        if max_tile == 4096:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_4096 = True  
+    
     env.score = score  
     legal_moves = [a for a in range(4) if env.is_move_legal(a)]
     if not legal_moves:
