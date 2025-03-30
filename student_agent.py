@@ -316,10 +316,12 @@ class NTupleApproximator:
         with open(filename, 'wb') as f:
             pickle.dump(self.weights, f)
 
+    
     def load(self, filename):
         with open(filename, 'rb') as f:
-            self.weights = pickle.load(f)
-
+            simple_weights = pickle.load(f)
+        # 包成 defaultdict(float)
+        self.weights = [defaultdict(float, w) for w in simple_weights]
 
 approximator = None
 def get_action(state, score):
