@@ -382,9 +382,11 @@ def get_action(state, score):
     best_action = None
     for a in legal_moves:
         sim_env = copy.deepcopy(env)
-        sim_env.step(a, spawn_tile=False)
+        # sim_env.step(a, spawn_tile=False)
+        _, reward, _, _ = sim_env.step(a, spawn_tile=False)
         after_state = sim_env.board.copy()
-        value = approximator.value(after_state)
+        # value = approximator.value(after_state)
+        value = reward + approximator.value(after_state)
 
         if value > best_value:
             best_value = value
