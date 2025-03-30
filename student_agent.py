@@ -327,7 +327,7 @@ approximator = None
 already_printed_2048 = False
 already_printed_4096 = False
 def get_action(state, score):
-    global approximator 
+    global approximator, already_printed_4096, already_printed_2048
     if approximator is None:
         # patterns = []
         # for row in range(4):
@@ -360,7 +360,7 @@ def get_action(state, score):
     if np.all(env.board == 0):
         already_printed_2048 = False
         already_printed_4096 = False
-        
+
     if not already_printed_2048:
         max_tile = np.max(env.board)
         if max_tile == 2048:
