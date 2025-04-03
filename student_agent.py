@@ -317,6 +317,7 @@ already_printed_2048 = False
 already_printed_4096 = False
 already_printed_8192 = False
 already_printed_16384 = False
+import os
 def get_action(state, score):
     global approximator, already_printed_4096, already_printed_2048, already_printed_8192, already_printed_16384
     
@@ -331,7 +332,15 @@ def get_action(state, score):
                     [(0,0), (0,1), (1,1), (2,1), (2,0), (3,1)],
                     [(0,0), (1,0), (0,1), (0,2), (1,2), (2,2)]]
         approximator = NTupleApproximator(board_size=4, patterns=patterns)
-        approximator.load("ntuple_weights.pkl")
+        if not os.path.exists("ntuple_weights.pkl"):
+            print("[ERROR] 找不到 ntuple_weights.pkl")
+        else:
+            print("Got it")
+        try:
+            approximator.load("ntuple_weights.pkl")
+            print("load successfully!")
+        except Exception as e:
+            print("[ERROR] 加載權重失敗:", e)
         print("load successfully!")
 
     env = Game2048Env()
