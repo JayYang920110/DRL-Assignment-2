@@ -320,7 +320,6 @@ already_printed_16384 = False
 def get_action(state, score):
     global approximator, already_printed_4096, already_printed_2048, already_printed_8192, already_printed_16384
     if approximator is None:
-
         patterns = [
                     [(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
                     [(0,0), (0,1), (1,1), (1,2), (1,3), (2,2)],
