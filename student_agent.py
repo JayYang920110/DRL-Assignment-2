@@ -331,7 +331,7 @@ def get_action(state, score):
                     [(0,0), (0,1), (1,1), (2,1), (2,0), (3,1)],
                     [(0,0), (1,0), (0,1), (0,2), (1,2), (2,2)]]
         approximator = NTupleApproximator(board_size=4, patterns=patterns)
-        approximator.load("ntuple_weights_answer.pkl")
+        approximator.load("ntuple_weights.pkl")
         print("load successfully!")
 
     env = Game2048Env()
