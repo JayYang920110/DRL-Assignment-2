@@ -312,135 +312,83 @@ class NTupleApproximator:
     def load(self, filename):
         with open(filename, 'rb') as f:
             self.weights = pickle.load(f)
-approximator = None
-already_printed = set()
-import gc
-def init_model():
-    global approximator
-    if approximator is not None:
-        del approximator
-        gc.collect()
-    patterns = [
-        [(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
-        [(0,0), (0,1), (1,1), (1,2), (1,3), (2,2)],
-        [(0,0), (1,0), (2,0), (2,1), (3,0), (3,1)],
-        [(0,1), (1,1), (2,1), (2,2), (3,1), (3,2)],
-        [(0,0), (0,1), (0,2), (1,1), (2,1), (2,2)],
-        [(0,0), (0,1), (1,1), (2,1), (3,1), (3,2)],
-        [(0,0), (0,1), (1,1), (2,1), (2,0), (3,1)],
-        [(0,0), (1,0), (0,1), (0,2), (1,2), (2,2)]
-    ]
-    approximator = NTupleApproximator(board_size=4, patterns=patterns)
-    try:
-        approximator.load("ntuple_weights.pkl")
-        print("Model loaded successfully!")
-    except Exception as e:
-        print("[WARNING] Failed to load model:", e)
 
+approximator = None
+already_printed_2048 = False
+already_printed_4096 = False
+already_printed_8192 = False
+already_printed_16384 = False
 def get_action(state, score):
-    global approximator, already_printed
+    global approximator, already_printed_4096, already_printed_2048, already_printed_8192, already_printed_16384
+    
     if approximator is None:
-        init_model()
+        patterns = [
+                    [(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
+                    [(0,0), (0,1), (1,1), (1,2), (1,3), (2,2)],
+                    [(0,0), (1,0), (2,0), (2,1), (3,0), (3,1)],
+                    [(0,1), (1,1), (2,1), (2,2), (3,1), (3,2)],
+                    [(0,0), (0,1), (0,2), (1,1), (2,1), (2,2)],
+                    [(0,0), (0,1), (1,1), (2,1), (3,1), (3,2)],
+                    [(0,0), (0,1), (1,1), (2,1), (2,0), (3,1)],
+                    [(0,0), (1,0), (0,1), (0,2), (1,2), (2,2)]]
+        approximator = NTupleApproximator(board_size=4, patterns=patterns)
+
+        try:
+            approximator.load("ntuple_weights.pkl")
+            print("load successfully!")
+        except Exception as e:
+            print("[ERROR] 加載權重失敗:", e)
+
 
     env = Game2048Env()
-    env.board = np.array(state, dtype=int)
-    env.score = score
+    env.board = np.array(state, dtype=int) 
+    if np.all(env.board == 0):
+        already_printed_2048 = False
+        already_printed_4096 = False
+        already_printed_8192 = False
+        already_printed_16384 = False
+    if not already_printed_2048:
+        max_tile = np.max(env.board)
+        if max_tile == 2048:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_2048 = True  
+    elif not already_printed_4096:
+        max_tile = np.max(env.board)
+        if max_tile == 4096:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_4096 = True  
+    elif not already_printed_8192:
+        max_tile = np.max(env.board)
+        if max_tile == 8192:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_8192 = True  
+    elif not already_printed_16384:
+        max_tile = np.max(env.board)
+        if max_tile == 16384:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_16384 = True 
 
-    max_tile = np.max(env.board)
-    if max_tile not in already_printed and max_tile >= 2048:
-        print(f"[INFO] Max tile reached: {max_tile}")
-        already_printed.add(max_tile)
-
+    env.score = score  
     legal_moves = [a for a in range(4) if env.is_move_legal(a)]
     if not legal_moves:
-        return 0
+        return 0  # 如果沒合法動作，回傳預設值
 
+    # 模擬每個動作的結果，選擇估價值最大的
     best_value = float('-inf')
-    best_action = 0
+    best_action = None
     for a in legal_moves:
         sim_env = copy.deepcopy(env)
+        # sim_env.step(a, spawn_tile=False)
         _, reward, _, _ = sim_env.step(a, spawn_tile=False)
-        value = reward + approximator.value(sim_env.board)
+        after_state = sim_env.board.copy()
+        # value = approximator.value(after_state)
+        value = reward + approximator.value(after_state)
+
         if value > best_value:
             best_value = value
             best_action = a
+
     return best_action
-# approximator = None
-# already_printed_2048 = False
-# already_printed_4096 = False
-# already_printed_8192 = False
-# already_printed_16384 = False
-# def get_action(state, score):
-#     global approximator, already_printed_4096, already_printed_2048, already_printed_8192, already_printed_16384
-    
-#     if approximator is None:
-#         patterns = [
-#                     [(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
-#                     [(0,0), (0,1), (1,1), (1,2), (1,3), (2,2)],
-#                     [(0,0), (1,0), (2,0), (2,1), (3,0), (3,1)],
-#                     [(0,1), (1,1), (2,1), (2,2), (3,1), (3,2)],
-#                     [(0,0), (0,1), (0,2), (1,1), (2,1), (2,2)],
-#                     [(0,0), (0,1), (1,1), (2,1), (3,1), (3,2)],
-#                     [(0,0), (0,1), (1,1), (2,1), (2,0), (3,1)],
-#                     [(0,0), (1,0), (0,1), (0,2), (1,2), (2,2)]]
-#         approximator = NTupleApproximator(board_size=4, patterns=patterns)
-
-#         try:
-#             approximator.load("ntuple_weights.pkl")
-#             print("load successfully!")
-#         except Exception as e:
-#             print("[ERROR] 加載權重失敗:", e)
-
-
-#     env = Game2048Env()
-#     env.board = np.array(state, dtype=int) 
-#     if np.all(env.board == 0):
-#         already_printed_2048 = False
-#         already_printed_4096 = False
-#         already_printed_8192 = False
-#         already_printed_16384 = False
-#     if not already_printed_2048:
-#         max_tile = np.max(env.board)
-#         if max_tile == 2048:
-#             print(f"[INFO] Max tile reached: {max_tile}")
-#             already_printed_2048 = True  
-#     elif not already_printed_4096:
-#         max_tile = np.max(env.board)
-#         if max_tile == 4096:
-#             print(f"[INFO] Max tile reached: {max_tile}")
-#             already_printed_4096 = True  
-#     elif not already_printed_8192:
-#         max_tile = np.max(env.board)
-#         if max_tile == 8192:
-#             print(f"[INFO] Max tile reached: {max_tile}")
-#             already_printed_8192 = True  
-#     elif not already_printed_16384:
-#         max_tile = np.max(env.board)
-#         if max_tile == 16384:
-#             print(f"[INFO] Max tile reached: {max_tile}")
-#             already_printed_16384 = True 
-
-#     env.score = score  
-#     legal_moves = [a for a in range(4) if env.is_move_legal(a)]
-#     if not legal_moves:
-#         return 0  # 如果沒合法動作，回傳預設值
-
-#     # 模擬每個動作的結果，選擇估價值最大的
-#     best_value = float('-inf')
-#     best_action = None
-#     for a in legal_moves:
-#         sim_env = copy.deepcopy(env)
-#         # sim_env.step(a, spawn_tile=False)
-#         _, reward, _, _ = sim_env.step(a, spawn_tile=False)
-#         after_state = sim_env.board.copy()
-#         # value = approximator.value(after_state)
-#         value = reward + approximator.value(after_state)
-
-#         if value > best_value:
-#             best_value = value
-#             best_action = a
-
-#     return best_action
     
     # You can submit this random agent to evaluate the performance of a purely random strategy.
 
