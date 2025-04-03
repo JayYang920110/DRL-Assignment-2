@@ -243,6 +243,9 @@ class NTupleApproximator:
             syms = self.generate_symmetries(pattern)
             self.symmetry_patterns.append(syms)
 
+    # def canonical_feature(self, board, symmetries):
+    #     return min(self.get_feature(board, coords) for coords in symmetries)
+    
     def generate_symmetries(self, pattern):
         # TODO: Generate 8 symmetrical transformations of the given pattern.
         syms = [
@@ -294,64 +297,37 @@ class NTupleApproximator:
                 index = tuple(self.tile_to_index(board[r, c]) for (r, c) in sym)
                 pattern_sum += self.weights[p][index]
             total += pattern_sum / 8.0  # 對8個對稱平均
-        return total
-    # def update(self, board, delta, alpha):
-    #     # TODO: Update weights based on the TD error.
-    #     # num_pattern = len(self.patterns)
-    #     # normalized_alpha = alpha / num_pattern
-    #     # for i, sys in enumerate(self.patterns):
-    #     #         feature = self.get_feature(board, sys)
-    #     #         self.weights[i][feature] += delta * alpha
-    #     for i, sym_group in enumerate(self.symmetry_patterns):  # 每個 pattern 的對稱群組
-    #         for coords in sym_group:  # 這組 pattern 的所有對稱版本
-    #             feature = self.get_feature(board, coords)
-    #             self.weights[i][feature] += (alpha * delta) / len(sym_group) 
-    #             # self.weights[i][feature] += (alpha * delta) 
+        return total / len(self.patterns)
+    
     def update(self, board, delta, alpha):
         for p in range(len(self.patterns)):  # 遍歷所有 pattern
             for sym in self.symmetry_patterns[p]:  # 遍歷該 pattern 的所有對稱版本
                 index = tuple(self.tile_to_index(board[r, c]) for (r, c) in sym)  # 將棋盤上的 tile 值轉換為索引
-                self.weights[p][index] += alpha * delta  # 更新對應特徵的權重
+                self.weights[p][index] += alpha * delta
+        return self.value(board)
     def save(self, filename):
         with open(filename, 'wb') as f:
             pickle.dump(self.weights, f)
 
-    
     def load(self, filename):
         with open(filename, 'rb') as f:
-            simple_weights = pickle.load(f)
-        # 包成 defaultdict(float)
-        self.weights = [defaultdict(float, w) for w in simple_weights]
-
+            self.weights = pickle.load(f)
 approximator = None
 already_printed_2048 = False
 already_printed_4096 = False
 def get_action(state, score):
     global approximator, already_printed_4096, already_printed_2048
     if approximator is None:
-        # patterns = []
-        # for row in range(4):
-        #     pattern = [(row, col) for col in range(4)]
-        #     patterns.append(pattern)
 
-        # for col in range(4):
-        #     pattern = [(row, col) for row in range(4)]
-        #     patterns.append(pattern)
-
-        # for row in range(3): 
-        #     for col in range(3):  
-        #         pattern = [
-        #             (row, col),
-        #             (row, col+1),
-        #             (row+1, col),
-        #             (row+1, col+1)
-        #         ]
-        #         patterns.append(pattern)
-        patterns = [[(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
-                [(1,1), (1,2), (2,1), (2,2), (3,1), (3,2)],
-                [(0,0), (1,0), (2,0), (2,1), (3,0), (3,1)],
-                [(0,1), (1,1), (2,1), (2,2), (3,1), (3,2)]]
-
+        patterns = [
+                    [(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
+                    [(0,0), (0,1), (1,1), (1,2), (1,3), (2,2)],
+                    [(0,0), (1,0), (2,0), (2,1), (3,0), (3,1)],
+                    [(0,1), (1,1), (2,1), (2,2), (3,1), (3,2)],
+                    [(0,0), (0,1), (0,2), (1,1), (2,1), (2,2)],
+                    [(0,0), (0,1), (1,1), (2,1), (3,1), (3,2)],
+                    [(0,0), (0,1), (1,1), (2,1), (2,0), (3,1)],
+                    [(0,0), (1,0), (0,1), (0,2), (1,2), (2,2)]]
         approximator = NTupleApproximator(board_size=4, patterns=patterns)
         approximator.load("ntuple_weights.pkl")
 
@@ -360,7 +336,8 @@ def get_action(state, score):
     if np.all(env.board == 0):
         already_printed_2048 = False
         already_printed_4096 = False
-
+        already_printed_8192 = False
+        already_printed_16384 = False
     if not already_printed_2048:
         max_tile = np.max(env.board)
         if max_tile == 2048:
@@ -371,7 +348,17 @@ def get_action(state, score):
         if max_tile == 4096:
             print(f"[INFO] Max tile reached: {max_tile}")
             already_printed_4096 = True  
-    
+    elif not already_printed_8192:
+        max_tile = np.max(env.board)
+        if max_tile == 8192:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_8192 = True  
+    elif not already_printed_16384:
+        max_tile = np.max(env.board)
+        if max_tile == 16384:
+            print(f"[INFO] Max tile reached: {max_tile}")
+            already_printed_16384 = True 
+
     env.score = score  
     legal_moves = [a for a in range(4) if env.is_move_legal(a)]
     if not legal_moves:
