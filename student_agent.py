@@ -319,6 +319,7 @@ already_printed_4096 = False
 already_printed_8192 = False
 already_printed_16384 = False
 def get_action(state, score):
+    print("1")
     global approximator, already_printed_4096, already_printed_2048, already_printed_8192, already_printed_16384
     
     if approximator is None:
