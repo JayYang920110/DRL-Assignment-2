@@ -319,6 +319,7 @@ already_printed_8192 = False
 already_printed_16384 = False
 def get_action(state, score):
     global approximator, already_printed_4096, already_printed_2048, already_printed_8192, already_printed_16384
+    
     if approximator is None:
         patterns = [
                     [(0,0), (0,1), (1,0), (1,1),(2,0), (2,1)],
@@ -330,7 +331,8 @@ def get_action(state, score):
                     [(0,0), (0,1), (1,1), (2,1), (2,0), (3,1)],
                     [(0,0), (1,0), (0,1), (0,2), (1,2), (2,2)]]
         approximator = NTupleApproximator(board_size=4, patterns=patterns)
-        approximator.load("ntuple_weights.pkl")
+        approximator.load("ntuple_weights_answer.pkl")
+        print("load successfully!")
 
     env = Game2048Env()
     env.board = np.array(state, dtype=int) 
