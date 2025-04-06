@@ -30,7 +30,7 @@ jobs:
         pip install gdown
     - name: 3. Download large file from Google Drive
       run: |
-        gdown --id 13-70eCXGPctq9Md_RCOAYMh_tCvhnagJ -O ntuple_weights.pkl
+        gdown --id 13-70eCXGPctq9Md_RCOAYMh_tCvhnagJ
 
     - name: 4. Ensure env.so is executable
       run: chmod +x env.cpython-38-x86_64-linux-gnu.so

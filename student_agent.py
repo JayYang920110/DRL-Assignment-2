@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import copy
 import random
 import math
-
+from td_mcts import TD_MCTS, PlayerNode
+from approximator import NTupleApproximator
 
 class Game2048Env(gym.Env):
     def __init__(self):
@@ -202,116 +203,7 @@ class Game2048Env(gym.Env):
 
         # If the simulated board is different from the current board, the move is legal
         return not np.array_equal(self.board, temp_board)
-import pickle
-import copy
-import random
-import math
-import numpy as np
-from collections import defaultdict
-import pickle
-from collections import namedtuple
 
-# -------------------------------
-# TODO: Define transformation functions (rotation and reflection), i.e., rot90, rot180, ..., etc.
-# -------------------------------
-def rot90(pattern):
-    return [(y, 3 - x) for (x, y) in pattern]
-
-def rot180(pattern):
-    return [(3 - x, 3 - y) for (x, y) in pattern]
-
-def rot270(pattern):
-    return [(3 - y, x) for (x, y) in pattern]
-
-def flip_horizontal(pattern):
-    return [(x, 3 - y) for (x, y) in pattern]
-
-
-class NTupleApproximator:
-    def __init__(self, board_size, patterns):
-        """
-        Initializes the N-Tuple approximator.
-        Hint: you can adjust these if you want
-        """
-        self.board_size = board_size
-        self.patterns = patterns
-        # Create a weight dictionary for each pattern (shared within a pattern group)
-        self.weights = [defaultdict(float) for _ in patterns]
-    #     # Generate symmetrical transformations for each pattern
-        self.symmetry_patterns = []
-        for pattern in self.patterns:
-            syms = self.generate_symmetries(pattern)
-            self.symmetry_patterns.append(syms)
-
-    # def canonical_feature(self, board, symmetries):
-    #     return min(self.get_feature(board, coords) for coords in symmetries)
-    
-    def generate_symmetries(self, pattern):
-        # TODO: Generate 8 symmetrical transformations of the given pattern.
-        syms = [
-            pattern,
-            rot90(pattern),
-            rot180(pattern),
-            rot270(pattern),
-            flip_horizontal(pattern),
-            rot90(flip_horizontal(pattern)),
-            rot180(flip_horizontal(pattern)),
-            rot270(flip_horizontal(pattern))
-        ]
-        return syms
-    def tile_to_index(self, tile):
-        """
-        Converts tile values to an index for the lookup table.
-        """
-        if tile == 0:
-            return 0
-        else:
-            return int(math.log(tile, 2))
-
-    def get_feature(self, board, coords):
-        # TODO: Extract tile values from the board based on the given coordinates and convert them into a feature tuple.
-        return tuple(self.tile_to_index(board[x, y]) for (x, y) in coords)
-
-
-    # def value(self, board):
-    #     # TODO: Estimate the board value: sum the evaluations from all patterns.
-    #     # total = 0.0
-    #     # for i, sys in enumerate(self.patterns):
-    #     #     feature = self.get_feature(board, sys)
-    #     #     total += self.weights[i][feature]
-    #     # total = total / len(self.patterns)
-    #     # return total
-    #     total = 0.0
-    #     count = 0
-    #     for i, sym_group in enumerate(self.symmetry_patterns):
-    #         for coords in sym_group:
-    #             feature = self.get_feature(board, coords)
-    #             total += self.weights[i][feature]
-    #             count += 1
-    #     return total / count if count > 0 else 0.0
-    def value(self, board):
-        total = 0.0
-        for p in range(len(self.patterns)):
-            pattern_sum = 0.0
-            for sym in self.symmetry_patterns[p]:
-                index = tuple(self.tile_to_index(board[r, c]) for (r, c) in sym)
-                pattern_sum += self.weights[p][index]
-            total += pattern_sum / 8.0  # 對8個對稱平均
-        return total / len(self.patterns)
-    
-    def update(self, board, delta, alpha):
-        for p in range(len(self.patterns)):  # 遍歷所有 pattern
-            for sym in self.symmetry_patterns[p]:  # 遍歷該 pattern 的所有對稱版本
-                index = tuple(self.tile_to_index(board[r, c]) for (r, c) in sym)  # 將棋盤上的 tile 值轉換為索引
-                self.weights[p][index] += alpha * delta
-        return self.value(board)
-    def save(self, filename):
-        with open(filename, 'wb') as f:
-            pickle.dump(self.weights, f)
-
-    def load(self, filename):
-        with open(filename, 'rb') as f:
-            self.weights = pickle.load(f)
 
 approximator = None
 already_printed_2048 = False
@@ -319,7 +211,7 @@ already_printed_4096 = False
 already_printed_8192 = False
 already_printed_16384 = False
 def get_action(state, score):
-    # print("1")
+
     global approximator, already_printed_4096, already_printed_2048, already_printed_8192, already_printed_16384
     
     if approximator is None:
@@ -372,24 +264,31 @@ def get_action(state, score):
     env.score = score  
     legal_moves = [a for a in range(4) if env.is_move_legal(a)]
     if not legal_moves:
-        return 0  # 如果沒合法動作，回傳預設值
+        return 0  
 
-    # 模擬每個動作的結果，選擇估價值最大的
-    best_value = float('-inf')
-    best_action = None
-    for a in legal_moves:
-        sim_env = copy.deepcopy(env)
-        # sim_env.step(a, spawn_tile=False)
-        _, reward, _, _ = sim_env.step(a, spawn_tile=False)
-        after_state = sim_env.board.copy()
-        # value = approximator.value(after_state)
-        value = reward + approximator.value(after_state)
+    root = PlayerNode(state=env.board.copy(), score=env.score, env=env)
+    td_mcts = TD_MCTS(env=env, approximator=approximator, iterations=50)
 
-        if value > best_value:
-            best_value = value
-            best_action = a
+    for _ in range(td_mcts.iterations):
+        td_mcts.run_simulation(root)
 
+    best_action, distribution = td_mcts.best_action_distribution(root)
     return best_action
+    # best_value = float('-inf')
+    # best_action = None
+    # for a in legal_moves:
+    #     sim_env = copy.deepcopy(env)
+    #     # sim_env.step(a, spawn_tile=False)
+    #     _, reward, _, _ = sim_env.step(a, spawn_tile=False)
+    #     after_state = sim_env.board.copy()
+    #     # value = approximator.value(after_state)
+    #     value = reward + approximator.value(after_state)
+
+    #     if value > best_value:
+    #         best_value = value
+    #         best_action = a
+
+    # return best_action
     
     # You can submit this random agent to evaluate the performance of a purely random strategy.
 
