@@ -112,7 +112,7 @@ class TD_MCTS:
     def select(self, root):
         node = root
         sim_env = self.create_env_from_state(node.state, node.score)
-
+        r_sum = 0
         while not node.is_leaf():
 
             if isinstance(node, PlayerNode):
@@ -120,7 +120,11 @@ class TD_MCTS:
                 # print(f"legal_actions: {list(node.legal_actions.keys())}")
                 # print(f"children: {list(node.children.keys())}")
                 action, _ = self.select_child(node)
+                prev_score = sim_env.score
                 _, new_score, done, _ = sim_env.step(action, spawn_tile=False)
+                reward = new_score - prev_score
+                r_sum += reward
+
 
                 if action not in node.children:
                     node.children[action] = ChanceNode(sim_env.board.copy(), new_score, parent=node, action=action)
@@ -134,7 +138,7 @@ class TD_MCTS:
 
                 node = node.children[sampled_key]
                 sim_env = self.create_env_from_state(node.state, node.score)
-        return node, sim_env
+        return node, sim_env, r_sum
     
     def expand(self, node, sim_env):
         if sim_env.is_game_over():
@@ -150,7 +154,7 @@ class TD_MCTS:
         elif isinstance(node, ChanceNode) and not node.expanded:
             self.expand_chance_node(node)
 
-    def rollout(self, node, sim_env):
+    def rollout(self, node, sim_env, r_sum):
         """
         根據 rollout 策略（A/B/C）對節點估值
         - 若 depth > 0，採用 C 策略（玩幾步隨機模擬）
@@ -167,6 +171,7 @@ class TD_MCTS:
         else:
             value = 0  # fallback
 
+        value = r_sum + value
         # Normalization（如果有探索常數 c）
         if self.c != 0:
             self.min_value_seen = min(self.min_value_seen, value)
@@ -205,13 +210,13 @@ class TD_MCTS:
     def run_simulation(self, root):
 
         # --- Selection ---
-        node, sim_env = self.select(root)
+        node, sim_env, r_sum = self.select(root)
 
         # --- Expansion ---
         self.expand(node, sim_env)
 
         # --- Rollout ---
-        reward = self.rollout(node, sim_env)
+        reward = self.rollout(node, sim_env, r_sum)
 
         # --- Backpropagation ---
         self.backpropagate(node, reward)
