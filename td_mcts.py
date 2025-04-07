@@ -112,7 +112,7 @@ class TD_MCTS:
     def select(self, root):
         node = root
         sim_env = self.create_env_from_state(node.state, node.score)
-        r_sum = 0
+        rewards = []
         while not node.is_leaf():
 
             if isinstance(node, PlayerNode):
@@ -123,7 +123,7 @@ class TD_MCTS:
                 prev_score = sim_env.score
                 _, new_score, done, _ = sim_env.step(action, spawn_tile=False)
                 reward = new_score - prev_score
-                r_sum += reward
+                rewards.append(reward)
 
 
                 if action not in node.children:
@@ -138,7 +138,7 @@ class TD_MCTS:
 
                 node = node.children[sampled_key]
                 sim_env = self.create_env_from_state(node.state, node.score)
-        return node, sim_env, r_sum
+        return node, sim_env, rewards
     
     def expand(self, node, sim_env):
         if sim_env.is_game_over():
@@ -154,13 +154,7 @@ class TD_MCTS:
         elif isinstance(node, ChanceNode) and not node.expanded:
             self.expand_chance_node(node)
 
-    def rollout(self, node, sim_env, r_sum):
-        """
-        根據 rollout 策略（A/B/C）對節點估值
-        - 若 depth > 0，採用 C 策略（玩幾步隨機模擬）
-        - 若 node 是 PlayerNode（A 策略）：評估所有 afterstate
-        - 若 node 是 ChanceNode（B 策略）：直接估值
-        """
+    def rollout(self, node, sim_env):
 
         if isinstance(node, PlayerNode):
             value = self.evaluate_best_afterstate_value(sim_env, self.approximator)
@@ -171,7 +165,6 @@ class TD_MCTS:
         else:
             value = 0  # fallback
 
-        value = r_sum + value
         # Normalization（如果有探索常數 c）
         if self.c != 0:
             self.min_value_seen = min(self.min_value_seen, value)
@@ -185,13 +178,17 @@ class TD_MCTS:
 
         return normalized_return
 
-    def backpropagate(self, node, reward):
-        # TODO: Propagate the reward up the tree, updating visit counts and total rewards.
-        while node is not None:
+    def backpropagate(self, node, value, rewards):
+        G = value
+        node.visits += 1
+        node.total_reward += G
+        node = node.parent
+        
+        for r in reversed(rewards):
+            G = r + self.gamma * G
             node.visits += 1
-            node.total_reward += reward
+            node.total_reward += G
             node = node.parent
-            # reward *= self.gamma
 
     def expand_chance_node(self, node):
         empty_tiles = list(zip(*np.where(node.state == 0)))
@@ -210,16 +207,16 @@ class TD_MCTS:
     def run_simulation(self, root):
 
         # --- Selection ---
-        node, sim_env, r_sum = self.select(root)
+        node, sim_env, rewards = self.select(root)
 
         # --- Expansion ---
         self.expand(node, sim_env)
 
         # --- Rollout ---
-        reward = self.rollout(node, sim_env, r_sum)
+        value = self.rollout(node, sim_env)
 
         # --- Backpropagation ---
-        self.backpropagate(node, reward)
+        self.backpropagate(node, value, rewards)
 
     def best_action_distribution(self, root):
         '''
