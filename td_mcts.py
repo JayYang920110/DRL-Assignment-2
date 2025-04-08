@@ -178,16 +178,39 @@ class TD_MCTS:
 
         return normalized_return
 
+    # def backpropagate(self, node, value, rewards):
+    #     G = value
+    #     node.visits += 1
+    #     node.total_reward += G
+    #     node = node.parent
+        
+    #     for r in reversed(rewards):
+    #         G = r + self.gamma * G
+    #         node.visits += 1
+    #         node.total_reward += G
+    #         node = node.parent
     def backpropagate(self, node, value, rewards):
         G = value
-        node.visits += 1
-        node.total_reward += G
-        node = node.parent
-        
-        for r in reversed(rewards):
-            G = r + self.gamma * G
-            node.visits += 1
+        reward_idx = len(rewards) - 1
+        if isinstance(node, ChanceNode):
             node.total_reward += G
+            node.visits += 1
+            node = node.parent
+        elif isinstance(node, PlayerNode):
+            node.visits += 1
+            node = node.parent
+            if node is not None and isinstance(node, ChanceNode):
+                node.total_reward += G
+                node.visits += 1
+                node = node.parent
+                
+        while node is not None:
+            node.visits += 1
+            if isinstance(node, ChanceNode):
+                reward = rewards[reward_idx]
+                reward_idx -= 1
+                G = G + reward
+                node.total_reward += G
             node = node.parent
 
     def expand_chance_node(self, node):
