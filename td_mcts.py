@@ -95,7 +95,6 @@ class TD_MCTS:
         for action, child in node.children.items():
             if child.visits == 0:
                 uct_score = self.approximator.value(child.state)
-                # uct_score = float("inf")
             else:
                 avg_reward = child.total_reward / child.visits
                 # print(avg_reward)

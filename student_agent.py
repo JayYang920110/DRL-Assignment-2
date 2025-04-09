@@ -332,7 +332,7 @@ def get_action(state, score):
         return 0  
 
     root = PlayerNode(state=env.board.copy(), score=env.score, env=env)
-    td_mcts = TD_MCTS(env, approximator, iterations=50, exploration_constant=0.0, rollout_depth=0, gamma=0.99)
+    td_mcts = TD_MCTS(env, approximator, iterations=150, exploration_constant=0.0, rollout_depth=0, gamma=0.99)
 
     for _ in range(td_mcts.iterations):
         td_mcts.run_simulation(root)
