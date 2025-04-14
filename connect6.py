@@ -1,6 +1,8 @@
 import sys
 import numpy as np
 import random
+from mcts_connect6 import MCTS
+from connect6_state import Connect6State
 
 class Connect6Game:
     def __init__(self, size=19):
@@ -8,7 +10,8 @@ class Connect6Game:
         self.board = np.zeros((size, size), dtype=int)  # 0: Empty, 1: Black, 2: White
         self.turn = 1  # 1: Black, 2: White
         self.game_over = False
-
+        self.mcts = MCTS(c=0.5, n_playout=70, n_leaf=4)
+        self.pending_move = None
     def reset_board(self):
         """Clears the board and resets the game."""
         self.board.fill(0)
@@ -60,8 +63,9 @@ class Connect6Game:
         else:
             return ord(col_char) - ord('A')
 
+
     def play_move(self, color, move):
-        """Places stones and checks the game status."""
+        """Processes a move and updates the board."""
         if self.game_over:
             print("? Game over")
             return
@@ -71,48 +75,54 @@ class Connect6Game:
 
         for stone in stones:
             stone = stone.strip()
-            if len(stone) < 2:
-                print("? Invalid format")
-                return
             col_char = stone[0].upper()
-            if not col_char.isalpha():
-                print("? Invalid format")
-                return
             col = self.label_to_index(col_char)
-            try:
-                row = int(stone[1:]) - 1
-            except ValueError:
-                print("? Invalid format")
-                return
-            if not (0 <= row < self.size and 0 <= col < self.size):
-                print("? Move out of board range")
-                return
-            if self.board[row, col] != 0:
-                print("? Position already occupied")
+            row = int(stone[1:]) - 1
+            if not (0 <= row < self.size and 0 <= col < self.size) or self.board[row, col] != 0:
+                print("? Invalid move")
                 return
             positions.append((row, col))
 
         for row, col in positions:
             self.board[row, col] = 1 if color.upper() == 'B' else 2
 
+        self.last_opponent_move = positions[-1]  # Track the opponent's last move
         self.turn = 3 - self.turn
         print('= ', end='', flush=True)
-
     def generate_move(self, color):
-        """Generates a random move for the computer."""
+       
         if self.game_over:
-            print("? Game over")
+            print("? Game over", flush=True)
             return
-
-        empty_positions = [(r, c) for r in range(self.size) for c in range(self.size) if self.board[r, c] == 0]
-        selected = random.sample(empty_positions, 1)
-        move_str = ",".join(f"{self.index_to_label(c)}{r+1}" for r, c in selected)
+        if self.pending_move:
+            r, c = self.pending_move
+            move_str = f"{self.index_to_label(c)}{r+1}"
+            self.play_move(color, move_str)
+            print(move_str, flush=True)
+            self.pending_move = None
+            return
+        if np.count_nonzero(self.board) == 0:
+            middle = self.size // 2
+            move_str = f"{self.index_to_label(middle)}{middle+1}"
+            self.play_move(color, move_str)
+            
+            print(move_str, flush=True)
+            print(move_str, file=sys.stderr)
+            return
         
-        self.play_move(color, move_str)
+        player = 1 if color.upper() == 'B' else 2
+        state = Connect6State(self.board, player, self.size)
 
-        print(f"{move_str}\n\n", end='', flush=True)
-        print(move_str, file=sys.stderr)
+        move1, move2 = self.mcts.get_move(state)
+
+    
+        # self.pending_moves.append((r2, c2))
+        move_str = f"{self.index_to_label(move1[1])}{move1[0]+1}"
+        self.play_move(color, move_str)
+        print(move_str, flush=True)
+        self.pending_move = move2
         return
+    
     def show_board(self):
         """Displays the board as text."""
         print("= ")
@@ -151,12 +161,14 @@ class Connect6Game:
             if len(parts) < 3:
                 print("? Invalid play command format")
             else:
+                self.mcts.i += 1
                 self.play_move(parts[1], parts[2])
                 print('', flush=True)
         elif cmd == "genmove":
             if len(parts) < 2:
                 print("? Invalid genmove command format")
             else:
+                self.mcts.i += 1
                 self.generate_move(parts[1])
         elif cmd == "showboard":
             self.show_board()

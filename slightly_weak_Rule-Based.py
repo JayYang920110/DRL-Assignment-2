@@ -227,7 +227,7 @@ class Connect6Game:
         command = command.strip()
         if command == "get_conf_str env_board_size:":
             print("env_board_size=19", flush=True)
-
+            
         if not command:
             return
         
